@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>SC2 / 群智实验台</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <script type="module" src="/assets/app.js"></script>
+</head>
+<body>
+  <svg class="svg-library" aria-hidden="true"><defs>
+    <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="icon-play" viewBox="0 0 24 24"><path d="m9 5 11 7-11 7z"/></symbol>
+    <symbol id="icon-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+    <symbol id="icon-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></symbol>
+    <symbol id="icon-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+    <symbol id="icon-radio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M7 7a7 7 0 0 0 0 10M17 7a7 7 0 0 1 0 10M3 3a13 13 0 0 0 0 18M21 3a13 13 0 0 1 0 18"/></symbol>
+    <symbol id="icon-box" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5zM3 8v9l9 5 9-5V8M12 13v9"/></symbol>
+    <symbol id="icon-crosshair" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 1v6M12 17v6M1 12h6M17 12h6"/></symbol>
+    <symbol id="icon-chart" viewBox="0 0 24 24"><path d="M4 3v17h17M8 15v-4M13 15V7M18 15V5"/></symbol>
+    <symbol id="icon-file" viewBox="0 0 24 24"><path d="M14 3H5v18h14V8l-5-5zM14 3v5h5M8 12h8M8 16h6"/></symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="icon-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v1"/></symbol>
+  </defs></svg>
+  <header class="app-header">
+    <a class="brand" href="/" aria-label="SC2 群智实验台首页"><span class="brand-mark"><span></span></span><span>SC2<span class="brand-slash"> / </span><strong>群智实验台</strong></span></a>
+    <div class="header-context"><span class="tiny-label">MISSION CONTROL</span><span class="header-divider"></span><span>星际争霸Ⅱ · 多 Agent 实验</span></div>
+    <button class="system-status" id="system-status" title="查看环境检查"><span class="status-dot pending"></span><span id="system-status-text">连接运行服务</span><span class="chevron">⌄</span></button>
+  </header>
+
+  <div class="app-shell">
+    <aside class="run-sidebar">
+      <div class="sidebar-top"><div class="eyebrow">WORKSPACE <span id="run-count">0</span></div><button class="primary-button new-run" id="new-run"><svg><use href="#icon-plus"/></svg>新建实验</button></div>
+      <div class="run-filter"><label for="run-filter" class="sr-only">筛选实验</label><select id="run-filter"><option value="all">全部实验</option><option value="active">正在运行</option><option value="history">历史记录</option></select></div>
+      <nav id="run-list" class="run-list" aria-label="实验列表"><div class="sidebar-empty">尚无实验记录<br><span>新建一局，开始记录决策与结果。</span></div></nav>
+      <div class="sidebar-footer"><span class="scope-indicator"></span><div><strong>1 个原生玩家 · 3 个功能 Agent</strong><span>当前支持对抗内置电脑</span></div></div>
+    </aside>
+
+    <main class="workspace">
+      <section class="mission-bar"><div class="mission-heading"><div class="eyebrow" id="mission-kicker">STARCRAFT II / EXPERIMENT</div><h1 id="mission-title">等待新的任务</h1><div class="mission-meta" id="mission-meta"><span>选择或创建实验，查看真实执行过程</span></div></div><div class="run-controls"><button class="icon-button" id="pause-run" disabled title="暂停实验" aria-label="暂停实验"><svg><use href="#icon-pause"/></svg></button><button class="icon-button" id="resume-run" disabled title="继续实验" aria-label="继续实验"><svg><use href="#icon-play"/></svg></button><button class="icon-button danger" id="stop-run" disabled title="停止实验" aria-label="停止实验"><svg><use href="#icon-stop"/></svg></button></div></section>
+      <div id="notice" class="notice hidden" role="status"></div>
+      <div id="mode-warning" class="mode-warning hidden"></div>
+      <section class="resource-bar" aria-label="当前游戏状态">
+        <div class="resource"><span class="resource-glyph mineral">◆</span><div><span>晶体矿</span><strong id="mineral-value">—</strong></div></div>
+        <div class="resource"><span class="resource-glyph gas">⬡</span><div><span>高能瓦斯</span><strong id="gas-value">—</strong></div></div>
+        <div class="resource"><svg class="resource-glyph"><use href="#icon-box"/></svg><div><span>人口 / 容量</span><strong id="supply-value">— / —</strong></div></div>
+        <div class="resource"><svg class="resource-glyph"><use href="#icon-crosshair"/></svg><div><span>工人 / 作战单位</span><strong id="unit-value">— / —</strong></div></div>
+        <div class="resource clock-resource"><div><span>游戏时间</span><strong id="game-time">00:00</strong></div><div><span>现实耗时</span><strong id="wall-time">—</strong></div></div>
+      </section>
+
+      <section class="battle-panel panel">
+        <div class="panel-toolbar"><div class="view-tabs" role="tablist" aria-label="战场视图"><button class="view-tab active" data-view="rgb" role="tab" aria-selected="true">原生画面<span>RGB</span></button><button class="view-tab" data-view="tactical" role="tab" aria-selected="false">战术态势<span>DATA</span></button></div><div class="connection-state"><span class="status-dot pending" id="stream-dot"></span><span id="stream-label">未连接对局</span></div></div>
+        <div class="battle-stage" id="battle-stage">
+          <img id="native-frame" class="native-frame hidden" alt="当前实验的星际争霸Ⅱ原生游戏画面">
+          <canvas id="tactical-canvas" class="hidden" aria-label="根据游戏状态绘制的战术示意图，不是原生游戏画面"></canvas>
+          <div class="stage-topline"><span id="view-label">NATIVE GAME VIEW</span><span id="round-label">ROUND —</span></div>
+          <div id="stage-empty" class="stage-empty"><div class="scan-emblem"><svg><use href="#icon-crosshair"/></svg></div><h2 id="stage-empty-title">战场尚未接入</h2><p id="stage-empty-text">原生游戏画面将在引擎启动后显示。<br>系统不会用示意画面替代真实游戏画面。</p><button class="secondary-button" id="stage-create">配置实验<svg><use href="#icon-plus"/></svg></button></div>
+          <div class="stage-bottomline"><div id="view-description">SC2 引擎输出 · 原生 RGB</div><div id="stage-status">NO ACTIVE SESSION</div></div>
+          <div class="tactical-legend hidden" id="tactical-legend"><span><i class="legend-dot friendly"></i>我方单位</span><span><i class="legend-dot structure"></i>我方建筑</span><span><i class="legend-dot enemy"></i>可见敌方</span><span><i class="legend-dot expansion"></i>扩张点</span></div>
+        </div>
+        <div class="stage-caption"><svg><use href="#icon-info"/></svg><span id="stage-caption">画面与战术状态分别展示；模型决策等待期间，游戏时间可能暂停。</span></div>
+      </section>
+
+      <section class="evidence-panel panel"><div class="panel-toolbar evidence-toolbar"><div class="evidence-tabs" role="tablist" aria-label="实验记录"><button class="evidence-tab active" data-panel="timeline" role="tab" aria-selected="true"><svg><use href="#icon-radio"/></svg>执行时间线<span id="event-count">0</span></button><button class="evidence-tab" data-panel="results" role="tab" aria-selected="false"><svg><use href="#icon-chart"/></svg>结果与指标</button><button class="evidence-tab" data-panel="replay" role="tab" aria-selected="false"><svg><use href="#icon-file"/></svg>回放与证据</button></div><span class="small-mono" id="evidence-id">NO RUN SELECTED</span></div>
+        <div id="timeline-panel" class="evidence-content"><div class="timeline-filters"><select id="event-filter" aria-label="筛选事件"><option value="all">全部事件</option><option value="decision">模型与决策</option><option value="command">指令与回执</option><option value="execution">后续执行异常</option><option value="message">Agent 通信</option><option value="error">错误与异常</option><option value="lifecycle">运行状态</option></select><input id="event-search" type="search" placeholder="搜索消息、工具或 Agent…" aria-label="搜索事件"><span class="small-muted">按实际发生顺序记录</span></div><div class="event-table-header"><span>时间 / 轮次</span><span>来源</span><span>事件</span></div><div id="event-list" class="event-list"><div class="content-empty">暂无执行事件</div></div></div>
+        <div id="results-panel" class="evidence-content hidden"><div class="results-grid" id="results-grid"></div><div class="milestone-section"><div class="eyebrow">任务阶段 · 按依赖解锁</div><div id="mission-stages" class="mission-stages"><span class="small-muted">本局未记录阶段评估</span></div></div><div class="milestone-section"><div class="eyebrow">任务里程碑</div><div id="milestones" class="milestones"><span class="small-muted">尚无经过观察确认的里程碑</span></div></div><div class="result-note">任务验收与原生胜负分别记录。指令接受不代表生产或任务完成；初始拒绝与后续执行失败分开计数。角色延迟为有效单次决策；整轮延迟另计。未达标项不填达标时间。</div></div>
+        <div id="replay-panel" class="evidence-content hidden"><div class="replay-heading"><div><strong>历史状态重建</strong><p>按记录恢复战术态势。原生 SC2Replay 文件需使用对应游戏版本播放。</p></div><button class="secondary-button" id="load-replay" disabled>加载状态记录</button></div><div class="replay-controls"><button class="icon-button" id="replay-play" disabled aria-label="播放状态回放" title="播放状态回放"><svg><use href="#icon-play"/></svg></button><input type="range" id="replay-slider" min="0" max="0" value="0" disabled aria-label="回放进度"><span class="small-mono" id="replay-position">0 / 0</span><button class="text-button" id="exit-replay" disabled>返回当前状态</button></div><div class="artifact-heading eyebrow">本局模型决策设置</div><div id="inference-settings" class="artifact-list"><span class="small-muted">选择实验后查看已记录的调用设置。</span></div><div class="artifact-heading eyebrow">本局作战指导</div><div id="guidance-settings" class="artifact-list"><span class="small-muted">选择实验后查看实际保存的作战指导。</span></div><div class="artifact-heading eyebrow">证据文件</div><div id="artifact-list" class="artifact-list"><div class="small-muted">选择实验后查看可下载记录</div></div></div>
+      </section>
+    </main>
+
+    <aside class="agent-sidebar"><div class="agent-sidebar-heading"><div><span class="eyebrow">AGENT NETWORK</span><h2>协同决策</h2></div><span class="agent-count">03</span></div><p class="agent-scope">同一玩家内的功能分工；不是三个独立游戏玩家。</p><div id="agent-list" class="agent-list"></div><section class="comms-panel"><div class="comms-heading"><svg><use href="#icon-radio"/></svg><strong>协作频道</strong><span id="message-count">0</span></div><div id="message-list" class="message-list"><div class="content-empty">尚无 Agent 通信<br><span>这里仅显示实际产生的消息</span></div></div></section><div class="model-footer"><span class="status-dot pending" id="model-dot"></span><div><strong id="model-name">模型服务未确认</strong><span id="model-description">等待服务状态</span></div></div></aside>
+  </div>
+
+  <dialog id="config-dialog" class="config-dialog"><form id="config-form"><div class="dialog-heading"><div><span class="eyebrow">NEW EXPERIMENT</span><h2>配置一场实验</h2></div><button type="button" class="icon-button" id="close-config" aria-label="关闭配置"><svg><use href="#icon-close"/></svg></button></div><p class="dialog-description">一个原生人族玩家，由经济、生产与战术三个功能 Agent 协同控制。切换任务会填入建议预算，可再自行调整。</p><div class="form-grid"><label class="full-width">实验名称<input name="name" id="config-name" aria-label="实验名称" type="text" maxlength="80" placeholder="例如：Simple64 建造与侦察"></label><label>运行环境<select name="backend" id="config-backend" aria-label="运行环境"><option value="sc2">StarCraft II · 原生引擎</option><option value="sandbox">Sandbox · 接口测试沙盒</option></select></label><label>决策策略<select name="policy" id="config-policy" aria-label="决策策略"><option value="llm">LLM · 真实模型调用</option><option value="scripted">Scripted · 规则脚本基线</option></select></label><label>模型决策模式<select name="reasoning_budget_tokens" id="config-reasoning_budget_tokens" aria-label="模型决策模式" aria-describedby="reasoning-mode-help"><option value="0" selected>快速（默认）</option><option value="512">有限思考（512，较慢）</option><option value="1024">有限思考（1024，较慢）</option></select><span id="reasoning-mode-help" class="small-muted">有限思考允许更长的决策过程，单轮等待可能增加。</span></label><label>任务场景<select name="scenario" id="config-scenario" aria-label="任务场景"><option value="build_and_scout">建立生产并完成侦察</option><option value="full_match">完整对局 · 对抗电脑</option><option value="expansion_logistics">扩张与资源供给 · 三阶段</option><option value="army_readiness">步兵产能与升级备战 · 三阶段</option><option value="expansion_and_victory">扩张后赢下对局 · 三阶段</option></select></label><label>作战指导<select name="guidance_profile" id="config-guidance_profile" aria-label="作战指导" aria-describedby="guidance-profile-help" disabled><option value="none" selected>自由协商（默认）</option><option value="marine_reference_v1">给定 Marine 参考策略</option></select><span id="guidance-profile-help" class="small-muted">仅完整对局、LLM 与状态感知执行指导同时启用时可选；软目标不改变原生胜负验收。</span></label><label>游戏地图<input name="map_name" id="config-map_name" aria-label="游戏地图" type="text" value="Simple64" required maxlength="80"></label><label>随机种子<input name="seed" id="config-seed" aria-label="随机种子" type="number" value="7" min="0" max="2147483647" required></label><label>最大决策轮数<input name="max_rounds" id="config-max_rounds" aria-label="最大决策轮数" type="number" value="60" min="1" max="500" required></label><label>最大游戏时间（秒）<input name="max_game_seconds" id="config-max_game_seconds" aria-label="最大游戏时间（秒）" type="number" value="300" min="10" max="3600" required></label><label>模型超时（秒）<input name="decision_timeout" id="config-decision_timeout" aria-label="模型超时（秒）" type="number" value="30" min="1" max="120" required></label><label>每轮推进 game loops<input name="advance_loops" id="config-advance_loops" aria-label="每轮推进 game loops" type="number" value="112" min="8" max="448" required></label><div class="checkbox-stack"><label><input type="checkbox" name="communication" id="config-communication" aria-label="启用 Agent 通信" checked>启用 Agent 通信</label><label><input type="checkbox" name="execution_guidance" id="config-execution_guidance" aria-label="状态感知执行指导" checked>状态感知执行指导</label><label><input type="checkbox" name="replay" id="config-replay" aria-label="保存游戏回放" checked>保存游戏回放</label></div></div><div id="config-mode-note" class="config-mode-note"></div><div id="config-error" class="form-error hidden" role="alert"></div><div class="dialog-actions"><span>配置与执行证据将一并保存</span><button type="submit" class="primary-button" id="start-experiment"><svg><use href="#icon-play"/></svg>启动实验</button></div></form></dialog>
+  <dialog id="health-dialog" class="health-dialog"><div class="dialog-heading"><div><span class="eyebrow">ENVIRONMENT</span><h2>环境与能力检查</h2></div><button class="icon-button" id="close-health" aria-label="关闭环境检查"><svg><use href="#icon-close"/></svg></button></div><div id="health-content" class="health-content">正在获取环境状态…</div><button class="secondary-button" id="refresh-health">重新检查</button></dialog>
+  <dialog id="stop-dialog" class="stop-dialog" aria-labelledby="stop-dialog-title" aria-describedby="stop-dialog-description">
+    <div class="dialog-heading"><div><span class="eyebrow">STOP EXPERIMENT</span><h2 id="stop-dialog-title">停止当前实验？</h2></div></div>
+    <p id="stop-run-name" class="stop-target"></p>
+    <p id="stop-dialog-description" class="dialog-description">停止后，本局不再继续执行。已保存的任务配置、执行记录和证据会保留；再次运行需要新建实验。</p>
+    <div class="dialog-actions"><button type="button" class="secondary-button" id="cancel-stop" aria-label="取消停止" autofocus>取消</button><button type="button" class="primary-button stop-confirm-button" id="confirm-stop" aria-label="确认停止实验"><svg><use href="#icon-stop"/></svg>确认停止</button></div>
+  </dialog>
+  <div class="toast hidden" id="toast" role="alert"></div>
+</body>
+</html>

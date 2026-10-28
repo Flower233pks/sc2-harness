@@ -1,0 +1,2 @@
+# Preserve the exact bytes of the native application used for audited runs.
+sc2_harness/** -text

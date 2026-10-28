@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>SC2 / 群智观战</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <script defer src="/assets/app.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">◇</span><strong>SC2 <span>/</span> 群智观战</strong></a>
+    <span class="header-note">STARCRAFT II · AGENT OBSERVATORY</span>
+    <span class="readonly-badge">只读观众席</span>
+    <span class="connection" id="connection" role="status">正在连接观众服务</span>
+  </header>
+  <div class="app-shell">
+    <aside class="run-sidebar" aria-label="已公开的实验">
+      <div class="sidebar-heading"><span class="eyebrow">PUBLISHED RUNS</span><span id="run-count">—</span></div>
+      <p class="sidebar-note">选择一局观看，不会启动游戏。</p>
+      <nav id="run-list" class="run-list"><p class="empty">加载公开记录…</p></nav>
+      <div class="scope-note"><strong>1 个原生玩家</strong><span>经济、生产、战术三个功能 Agent<br>对抗内置电脑</span></div>
+    </aside>
+    <main class="workspace">
+      <section class="mission-bar">
+        <div class="eyebrow">EXPERIMENT / READ ONLY</div>
+        <h1 id="run-title">选择一局实验</h1>
+        <div class="mission-meta" id="run-meta">等待已公开的运行记录</div>
+      </section>
+      <div class="notice hidden" id="notice" role="status"></div>
+      <div class="mode-note" id="mode-note">展示真实游戏状态与模型公开决策；观战页面不提供实验控制。</div>
+      <section class="resource-bar" aria-label="所示状态的资源">
+        <div><span>晶体矿</span><strong id="minerals">—</strong></div>
+        <div><span>高能瓦斯</span><strong id="vespene">—</strong></div>
+        <div><span>人口 / 容量</span><strong id="supply">— / —</strong></div>
+        <div><span>工人 / 作战单位</span><strong id="units">— / —</strong></div>
+        <div><span id="game-clock-label">游戏时间</span><strong id="game-time">—</strong></div>
+        <div><span>本局现实耗时</span><strong id="wall-time">—</strong></div>
+      </section>
+      <section class="panel battle-panel" aria-label="战场画面">
+        <div class="panel-toolbar">
+          <div class="view-tabs" role="tablist" aria-label="画面模式">
+            <button id="view-rgb" class="view-tab active" role="tab" aria-selected="true">原生画面 <small>RGB</small></button>
+            <button id="view-tactical" class="view-tab" role="tab" aria-selected="false">战术态势 <small>DATA</small></button>
+          </div>
+          <span class="small-mono" id="media-status">NO RUN SELECTED</span>
+        </div>
+        <div class="battle-stage" id="battle-stage">
+          <img id="native-image" class="native-image hidden" alt="本局真实星际争霸Ⅱ画面">
+          <canvas id="tactical-canvas" class="hidden" aria-label="按已记录公开状态绘制的战术示意图，非原生画面"></canvas>
+          <div class="stage-topline"><span id="view-label">等待画面</span><span id="round-label">ROUND —</span></div>
+          <div class="stage-empty" id="stage-empty"><span class="scan-mark">⌖</span><h2 id="empty-title">等待真实游戏画面</h2><p id="empty-text">选择公开实验后显示原生画面；战术视图单独标注。</p></div>
+          <div class="tactical-legend hidden" id="tactical-legend"><span><i class="friendly"></i>我方单位</span><span><i class="structure"></i>我方建筑</span><span><i class="enemy"></i>可见敌方</span><span><i class="expansion"></i>公开资源位置</span></div>
+        </div>
+        <div class="stage-caption" id="media-description">原生 RGB 与战术示意图分开展示。模型等待期间，游戏时间可能暂停。</div>
+      </section>
+      <section class="panel history-panel" aria-label="历史状态回放">
+        <div class="panel-toolbar"><strong>历史状态</strong><span class="small-muted" id="history-count">尚无记录</span></div>
+        <div class="history-controls">
+          <button id="history-play" class="secondary-button" disabled>播放状态记录</button>
+          <input id="history-slider" type="range" min="0" max="0" value="0" disabled aria-label="选择历史状态">
+          <span class="small-mono" id="history-position">0 / 0</span>
+          <button id="history-current" class="text-button" disabled>返回最新状态</button>
+        </div>
+        <p class="history-note" id="history-note">滑块与播放只浏览已记录状态，不控制游戏。原生录像和状态记录使用独立时间轴。</p>
+      </section>
+      <section class="panel evidence-panel">
+        <div class="panel-toolbar">
+          <div class="view-tabs" role="tablist" aria-label="实验信息">
+            <button id="tab-events" class="view-tab active" role="tab" aria-selected="true">执行记录</button>
+            <button id="tab-results" class="view-tab" role="tab" aria-selected="false">结果与指标</button>
+          </div>
+          <span id="evidence-id" class="small-mono">NO RUN SELECTED</span>
+        </div>
+        <div id="events-panel"><div class="event-heading"><span>轮次 / 时间</span><span>来源</span><span>公开记录</span></div><div id="event-list" class="event-list"><p class="empty">尚无公开事件</p></div></div>
+        <div id="results-panel" class="results-content hidden">
+          <p class="small-muted">以下是本局当前或终态汇总，不随历史滑块重新计算。</p>
+          <div class="results-grid" id="results-grid"></div>
+          <div class="result-detail" id="evaluation-detail"></div>
+          <p class="result-caution">指令 ACK 表示引擎接受，不代表已完成。初始拒绝、后续执行失败、任务结果与原生胜负分别记录；未报告的数据保留为未知。</p>
+        </div>
+      </section>
+    </main>
+    <aside class="agent-sidebar">
+      <div class="agent-heading"><div><span class="eyebrow">AGENT NETWORK</span><h2>协同决策</h2></div><span>03</span></div>
+      <p class="sidebar-note" id="agent-context">显示公开目标、理由与动作，不展示模型私有推理。</p>
+      <div id="agent-list"></div>
+      <section class="comms-panel"><div class="comms-heading"><strong>协作频道</strong><span id="message-count">0</span></div><div id="message-list" class="message-list"><p class="empty">尚无公开通信</p></div></section>
+      <div class="model-footer"><span class="eyebrow">RECORDED MODEL</span><strong id="model-name">未知</strong><span>仅浏览 · 每 2 秒刷新状态</span></div>
+    </aside>
+  </div>
+</body>
+</html>

@@ -1,0 +1,18 @@
+# Example user unit; adapt the project location and private environment first.
+[Unit]
+Description=SC2 private experiment workbench
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory=%h/projects/sc2-harness
+EnvironmentFile=%h/.config/sc2-harness/workbench.env
+ExecStart=%h/projects/sc2-harness/.venv/bin/python -m sc2_harness serve --host 127.0.0.1 --port 18890
+Restart=always
+RestartSec=5
+TimeoutStopSec=60
+UMask=0077
+
+[Install]
+WantedBy=default.target
