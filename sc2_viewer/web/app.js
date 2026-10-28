@@ -54,8 +54,9 @@ if (typeof module !== "undefined" && module.exports) {
 
 if (typeof document !== "undefined") {
   const byId = id => document.getElementById(id);
-  const state = {config: null, runId: null, run: null, runs: [], events: [], snapshots: [], eventCursor: 0, snapshotCursor: 0, generation: 0, busyFor: null, view: "rgb", history: false, historyIndex: 0, playing: null, mediaKey: null, mediaKind: null, mediaFailed: false, lastListAt: 0};
+  const state = {config: null, runId: null, run: null, runs: [], events: [], snapshots: [], eventCursor: 0, snapshotCursor: 0, generation: 0, busyFor: null, view: "rgb", history: false, historyIndex: 0, playing: null, mediaKey: null, mediaKind: null, mediaFailed: false, mediaReady: false, mediaFailures: new Set(), videoPlayError: false, lastListAt: 0};
   const image = byId("native-image");
+  const video = byId("native-video");
   const canvas = byId("tactical-canvas");
   function text(id, value) { byId(id).textContent = value; }
   function element(tag, className, value) {
@@ -224,54 +225,113 @@ if (typeof document !== "undefined") {
     text("history-note", state.history ? "正在浏览历史状态；角色和通信也按所选轮次展示。播放仅移动本地滑块，不控制游戏。" : "滑块与播放只浏览已记录状态，不控制游戏。原生录像和状态记录使用独立时间轴。");
   }
   function emptyStage(title, description) { text("empty-title", title); text("empty-text", description); byId("stage-empty").classList.remove("hidden"); }
+  function pauseVideo() { if (!video.paused) video.pause(); }
+  function videoControls() {
+    const visible = state.view === "rgb" && !state.history && state.mediaKind === "video" && !state.mediaFailed;
+    byId("video-options").classList.toggle("hidden", !visible);
+    const playing = visible && !video.paused && !video.ended;
+    const label = video.ended ? "重播原生录像" : playing ? "暂停原生录像" : "播放原生录像";
+    text("video-play-toggle", label);
+    byId("video-play-toggle").setAttribute("aria-label", label);
+    byId("video-play-toggle").setAttribute("aria-pressed", String(playing));
+    byId("video-play-toggle").disabled = !visible || !state.mediaReady;
+    byId("video-speed").disabled = !visible || !state.mediaReady;
+    byId("video-speed").value = [1, 2, 4, 8].includes(video.playbackRate) ? String(video.playbackRate) : "";
+    text("video-play-hint", state.videoPlayError ? "浏览器尚未开始播放，请使用画面底部的播放控件。" : !state.mediaReady ? "正在读取录像信息，随后可手动播放。" : video.ended ? "录像播放结束。点击重播，或拖动进度条回看。" : "点击播放；可拖动画面底部进度条。切换视图会暂停，返回后可继续。");
+  }
+  function mediaLabels() {
+    if (state.mediaKind === "video") {
+      text("view-label", "已结束对局 · 原生视频回放（非直播）");
+      text("media-status", video.ended ? "VIDEO ENDED / NOT LIVE" : video.paused ? "VIDEO PAUSED / NOT LIVE" : "VIDEO PLAYBACK / NOT LIVE");
+      text("media-description", "原生墙钟抽样画面的视频回放：点击播放，支持暂停、拖动和倍速；模型等待时画面可能长时间静止。状态记录使用独立时间轴。");
+    } else if (state.mediaKind === "recording") {
+      text("view-label", "已结束对局 · 备用 WebP 动画（非直播）");
+      text("media-status", "BACKUP ANIMATION / NOT LIVE");
+      text("media-description", `${state.mediaFailures.has("video") ? "视频暂不可播放，已回退至" : "本局未提供可控视频，显示"}备用 WebP 动画。动画自动播放一次，没有视频暂停或进度控制；模型等待帧可能静止十余秒。`);
+    } else {
+      text("view-label", isTerminal(state.run) ? "已结束对局 · 最后保存帧（非直播）" : "当前原生 RGB · 非连续视频流");
+      text("media-status", isTerminal(state.run) ? "LAST FRAME / NOT LIVE" : state.run?.status === "paused" ? "PAUSED / LAST FRAME" : "FRAME REFRESH / 2s");
+      text("media-description", isTerminal(state.run) ? "本局没有可用原生录像，显示最后保存帧（非直播）；可切换战术态势浏览历史状态。" : state.run?.status === "paused" ? "本局已暂停；显示最近可读取的真实帧。观众页面不控制游戏。" : "SC2 原生 RGB，按帧更新。模型决策等待期间，游戏时间可能暂停。");
+    }
+    videoControls();
+  }
+  function preferredTerminalMedia() {
+    // A missing flag never starts a video request. A video already opened from
+    // positive availability evidence stays in place across polling responses.
+    const openVideo = state.mediaKind === "video" && state.mediaKey?.startsWith(state.runId + ":");
+    if (!state.mediaFailures.has("video") && (state.run?.video_available === true || openVideo)) return "video";
+    if (state.run?.recording_available !== false && !state.mediaFailures.has("recording")) return "recording";
+    return "frame";
+  }
   function mediaLoaded(key, kind) {
-    if (state.mediaKey !== key || state.view !== "rgb" || state.history) return;
-    image.classList.remove("hidden"); byId("stage-empty").classList.add("hidden"); state.mediaFailed = false;
-    text("view-label", kind === "recording" ? "已结束对局 · 已录制画面（非直播）" : isTerminal(state.run) ? "已结束对局 · 最后保存帧（非直播）" : "当前原生 RGB · 非连续视频流");
-    text("media-status", kind === "recording" ? "RECORDED / NOT LIVE" : isTerminal(state.run) ? "LAST FRAME / NOT LIVE" : state.run?.status === "paused" ? "PAUSED / LAST FRAME" : "FRAME REFRESH / 2s");
+    if (state.mediaKey !== key) return;
+    state.mediaFailed = false; state.mediaReady = true;
+    if (state.view !== "rgb" || state.history) return;
+    image.classList.toggle("hidden", kind === "video"); video.classList.toggle("hidden", kind !== "video");
+    byId("stage-empty").classList.add("hidden"); mediaLabels();
   }
   function setMedia(kind, force = false) {
     if (!state.runId) return;
     const terminal = isTerminal(state.run);
     const key = `${state.runId}:${kind}:${terminal ? "terminal" : state.run?.status || "unknown"}`;
     if (!force && state.mediaKey === key) return;
-    state.mediaKey = key; state.mediaKind = kind; state.mediaFailed = false;
+    pauseVideo(); state.mediaKey = key; state.mediaKind = kind; state.mediaFailed = false; state.mediaReady = false; state.videoPlayError = false;
+    image.classList.add("hidden"); video.classList.add("hidden");
+    if (kind === "video") {
+      video.onloadedmetadata = () => mediaLoaded(key, kind);
+      video.onloadeddata = () => mediaLoaded(key, kind);
+      video.onerror = () => {
+        if (state.mediaKey !== key) return;
+        state.mediaFailures.add("video"); pauseVideo(); video.classList.add("hidden");
+        setMedia(preferredTerminalMedia());
+      };
+      video.defaultPlaybackRate = 1; video.playbackRate = 1;
+      video.src = `/api/runs/${state.runId}/recording.mp4`;
+      video.load(); // Only on a new media key, never during the two-second render.
+      video.classList.remove("hidden"); mediaLabels();
+      return;
+    }
     image.onload = () => mediaLoaded(key, kind);
     image.onerror = () => {
       if (state.mediaKey !== key) return;
       image.classList.add("hidden");
       if (kind === "recording") {
-        text("media-description", "本局未提供可用录像，回退至最后保存帧；可切换战术态势浏览历史状态。最后帧不是直播。");
+        state.mediaFailures.add("recording");
         setMedia("frame");
       } else {
         state.mediaFailed = true;
         emptyStage("真实画面暂不可用", terminal ? "本局没有可读取的录像或最后帧。可切换战术态势查看已保存状态。" : "原生画面尚未生成或暂时读取失败。页面不会用战术图冒充真实画面。");
       }
+      if (state.view === "rgb" && !state.history) mediaLabels();
     };
     image.src = kind === "recording" ? `/api/runs/${state.runId}/recording.webp` : `/api/runs/${state.runId}/frame${terminal ? "" : `?v=${Date.now()}`}`;
+    if (state.view === "rgb" && !state.history) mediaLabels();
   }
   function refreshMedia() {
     if (!state.run) return;
     const tactical = state.view === "tactical" || state.history;
     byId("view-rgb").classList.toggle("active", !tactical); byId("view-rgb").setAttribute("aria-selected", String(!tactical));
     byId("view-tactical").classList.toggle("active", tactical); byId("view-tactical").setAttribute("aria-selected", String(tactical));
-    canvas.classList.toggle("hidden", !tactical); image.classList.toggle("hidden", tactical || state.mediaFailed || !image.complete || !image.naturalWidth);
+    canvas.classList.toggle("hidden", !tactical);
+    image.classList.toggle("hidden", tactical || state.mediaKind === "video" || state.mediaFailed || !image.complete || !image.naturalWidth);
+    video.classList.toggle("hidden", tactical || state.mediaKind !== "video" || state.mediaFailed);
     byId("tactical-legend").classList.toggle("hidden", !tactical);
     if (tactical) {
+      pauseVideo(); videoControls();
       text("view-label", state.history ? "历史公开状态 · 战术示意（非原生画面）" : "公开状态 · 战术示意（非原生画面）");
       text("media-status", state.history ? "HISTORICAL SNAPSHOT" : isTerminal(state.run) ? "FINAL STATE / NOT LIVE" : "OBSERVED STATE");
       text("media-description", "仅按已公开的位置与可见敌方绘图；不是完整地图视野，也不代表模型视觉输入。地图原点和坐标来自游戏状态。");
       drawTactical();
     } else {
-      const recordingAvailable = state.run.recording_available !== false;
-      text("media-status", isTerminal(state.run) ? state.mediaKind === "frame" || !recordingAvailable ? "LAST FRAME / NOT LIVE" : "RECORDED / NOT LIVE" : state.run.status === "paused" ? "PAUSED / LAST FRAME" : "FRAME REFRESH / 2s");
-      text("media-description", isTerminal(state.run) ? state.mediaKind === "frame" || !recordingAvailable ? "本局没有可用录像，显示最后保存帧（非直播）；可切换战术态势浏览历史状态。" : "已结束对局：播放真实墙钟抽样录制画面（非直播、非固定游戏帧率）；状态回放使用独立时间轴。" : state.run.status === "paused" ? "本局已暂停；显示最近可读取的真实帧。观众页面不控制游戏。" : "SC2 原生 RGB，按帧更新。模型决策等待期间，游戏时间可能暂停。");
-      if (!state.mediaKey || !state.mediaKey.startsWith(state.runId + ":")) {
-        emptyStage("正在读取真实画面", isTerminal(state.run) ? "优先读取已录制画面；若未提供则显示最后保存帧。" : "画面与公开状态每两秒更新；模型决策期间游戏时间可能暂停。");
-        setMedia(isTerminal(state.run) && recordingAvailable ? "recording" : "frame");
+      const preferred = isTerminal(state.run) ? preferredTerminalMedia() : "frame";
+      const targetKey = `${state.runId}:${preferred}:${isTerminal(state.run) ? "terminal" : state.run.status || "unknown"}`;
+      if (state.mediaKey !== targetKey) {
+        emptyStage("正在读取真实画面", preferred === "video" ? "正在读取录像信息；加载后请点击播放。" : isTerminal(state.run) ? "读取备用动画或最后保存帧。" : "画面与公开状态每两秒更新；模型决策期间游戏时间可能暂停。");
+        setMedia(preferred);
       } else if (!isTerminal(state.run) && state.run.status !== "paused") setMedia("frame", true);
-      else if (isTerminal(state.run) && !state.mediaKey.endsWith(":terminal")) setMedia(recordingAvailable ? "recording" : "frame");
-      else if (!state.mediaFailed && image.complete && image.naturalWidth) mediaLoaded(state.mediaKey, state.mediaKind);
+      else if (state.mediaKind === "video" && !state.mediaFailed && video.readyState >= 1) mediaLoaded(state.mediaKey, state.mediaKind);
+      else if (state.mediaKind !== "video" && !state.mediaFailed && image.complete && image.naturalWidth) mediaLoaded(state.mediaKey, state.mediaKind);
+      mediaLabels();
     }
   }
   function drawTactical() {
@@ -337,7 +397,9 @@ if (typeof document !== "undefined") {
   }
   async function selectRun(id) {
     if (!RUN_ID.test(id) || !state.config.run_ids.includes(id) || id === state.runId) return;
-    stopHistoryPlayback(); state.generation += 1; state.runId = id; state.run = null; state.events = []; state.snapshots = []; state.eventCursor = 0; state.snapshotCursor = 0; state.history = false; state.historyIndex = 0; state.mediaKey = null; state.mediaKind = null; state.mediaFailed = false;
+    stopHistoryPlayback(); pauseVideo(); video.onloadedmetadata = null; video.onloadeddata = null; video.onerror = null;
+    video.removeAttribute("src"); video.load(); video.classList.add("hidden"); byId("video-options").classList.add("hidden");
+    state.generation += 1; state.runId = id; state.run = null; state.events = []; state.snapshots = []; state.eventCursor = 0; state.snapshotCursor = 0; state.history = false; state.historyIndex = 0; state.mediaKey = null; state.mediaKind = null; state.mediaFailed = false; state.mediaReady = false; state.mediaFailures.clear(); state.videoPlayError = false;
     image.removeAttribute("src"); image.classList.add("hidden"); canvas.classList.add("hidden"); byId("tactical-legend").classList.add("hidden");
     byId("agent-list").replaceChildren(element("p", "empty", "正在读取本局公开决策…"));
     byId("message-list").replaceChildren(element("p", "empty", "正在读取本局通信…"));
@@ -349,6 +411,23 @@ if (typeof document !== "undefined") {
     await tick();
   }
   byId("view-rgb").addEventListener("click", () => { stopHistoryPlayback(); state.history = false; state.view = "rgb"; render(); });
+  for (const eventName of ["play", "pause", "ended", "ratechange"]) video.addEventListener(eventName, () => {
+    if (state.mediaKind !== "video" || state.view !== "rgb" || state.history) return;
+    if (eventName === "play") state.videoPlayError = false;
+    mediaLabels();
+  });
+  byId("video-play-toggle").addEventListener("click", async () => {
+    if (state.mediaKind !== "video" || !state.mediaReady || state.view !== "rgb" || state.history) return;
+    if (!video.paused && !video.ended) { video.pause(); return; }
+    if (video.ended) video.currentTime = 0;
+    const key = state.mediaKey;
+    try { await video.play(); }
+    catch { if (state.mediaKey === key) { state.videoPlayError = true; videoControls(); } }
+  });
+  byId("video-speed").addEventListener("change", event => {
+    const speed = Number(event.target.value);
+    if (state.mediaKind === "video" && state.mediaReady && [1, 2, 4, 8].includes(speed)) video.playbackRate = speed;
+  });
   byId("view-tactical").addEventListener("click", () => { state.view = "tactical"; render(); });
   byId("history-slider").addEventListener("input", event => { stopHistoryPlayback(); state.history = true; state.view = "tactical"; state.historyIndex = Math.max(0, Math.min(state.snapshots.length - 1, Number(event.target.value))); render(); });
   byId("history-current").addEventListener("click", returnCurrent);

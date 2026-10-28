@@ -8,7 +8,7 @@ An observable StarCraft II testbed: three function-level agents control one nati
 
 ![只读观众页：真实 SC2 录制、历史状态与原生胜负；图示为已结束的实验](docs/images/spectator.jpg)
 
-独立只读观众页支持原生录制、战术历史播放、三个角色的公开决策与通信，以及真实胜负和调用指标。管理控制台保留在服务器本机，观众不能创建、暂停或停止任务。分享方式见 [SHARING](docs/SHARING.md)。
+独立只读观众页支持原生录制的播放、暂停、拖动和倍速（需配置 MP4），以及战术历史播放、三个角色的公开决策与通信、真实胜负和调用指标。管理控制台保留在服务器本机，观众不能创建、暂停或停止任务。分享与已有录制的离线转换方式见 [SHARING](docs/SHARING.md)。
 
 已验证的 `b5c474…` 应用版本使用 Qwen3-8B、**给定 Marine 参考策略、VeryEasy 人族对手、seed 7、暂停步进**。在三张地图各取得一局原生 Victory，额外同配置 Simple64 复验自然 Defeat：
 

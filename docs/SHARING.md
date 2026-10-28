@@ -31,7 +31,7 @@ python -m sc2_viewer --host 127.0.0.1 --port 8903 \
 
 当前 viewer 将上游限制为本机 `18890` 管理工作台，不接受任意远程地址；不要用它转发外网服务。需要展示多局时重复 `--allow-run-id`。新增运行须由管理员更新白名单并重启 viewer，不因此重启游戏或模型。
 
-可选地，在独立的 `/path/to/viewer-media/RUN_ID/` 中放入获准展示的 `recording.webp`，再增加对应参数：
+可选地，在独立的 `/path/to/viewer-media/RUN_ID/` 中放入获准展示的 `recording.mp4`（H.264、yuv420p，建议 faststart）或备用 `recording.webp`，再增加对应参数：
 
 ```bash
 RUN_ID=REPLACE_WITH_APPROVED_32_HEX_RUN_ID
@@ -69,7 +69,20 @@ ssh -N -L 18890:127.0.0.1:18890 SSH_ACCOUNT@SERVER_LAN_IP
 
 当前运行的原生帧是最近一次实际取得的 RGB；模型等待、暂停或终局时，画面可能保持不变。历史战术视图来自快照重建，采样录制包含等待时间，都不应标为正在进行的实时对战。原生画面缺失时应显示不可用，不能用战术图冒充。
 
-采样 `recording.webp` 仅在管理员明确配置后提供；它不是原生帧率视频。原始 `.SC2Replay`、完整 manifest、提示和任意运行文件不作为公开观战下载面。公开结果与已知限制见 [DEMO_RESULTS](DEMO_RESULTS.md)。
+终局优先显示已配置且通过文件检查的 `recording.mp4`。点击“播放原生录像”，使用画面底部控件暂停、拖动、重播，或选择 1x、2x、4x、8x；两秒一次的状态刷新不会重置录像进度。切换视图会暂停录像，返回后手动继续。视频与下方历史状态使用独立时间轴，“播放状态记录”只播放战术快照，不控制原生录像。
+
+已有采样 WebP 可以离线转换，不需重跑游戏。自行准备含 libx264 的 ffmpeg，然后在项目目录执行：
+
+```bash
+python scripts/convert_recording_video.py \
+  --input /path/to/viewer-media/RUN_ID/recording.webp \
+  --output /path/to/viewer-media/RUN_ID/recording.mp4 \
+  --ffmpeg /path/to/ffmpeg
+```
+
+脚本保留原始采样帧和等待时长，验证转换后的解码和时间戳后才发布文件，不覆盖已有输出。转换增加的是播放控制，不会生成缺失的游戏画面或提高原始采样频率。模型等待期间原速画面仍可能静止十余秒，可用倍速或拖动跳过。视频不可用时回退至只自动播放一次、没有视频控制的备用 WebP；两者都不可用时显示最后保存帧并明确标注。
+
+媒体只在管理员明确配置后提供；均不是原生帧率视频。原始 `.SC2Replay`、完整 manifest、提示和任意运行文件不作为公开观战下载面。公开结果与已知限制见 [DEMO_RESULTS](DEMO_RESULTS.md)。
 
 需要持续提供入口时，可使用服务器已有的进程管理方式维护 viewer，并定期确认上游状态、允许的运行列表和媒体容量。保持进程运行不代表游戏持续自动开局；结束的样本应明确显示终局，后续新运行仍需管理员创建和加入白名单。
 

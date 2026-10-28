@@ -235,3 +235,94 @@ def test_cli_maps_explicit_flags_without_loading_admin_runtime(tmp_path, monkeyp
     assert called["settings"].recordings == {RUN: "published"}
     source = (Path(__file__).parents[1] / "sc2_viewer" / "app.py").read_text(encoding="utf-8")
     assert "from sc2_harness" not in source and "import sc2_harness" not in source
+
+
+def mp4_header(*, brand=b"isom", extended=False, padding=False):
+    # Header-only fixture: serving validates the container type, not decoding.
+    body = brand + b"\0\0\0\1" + b"isommp42"
+    ftyp = (b"\0\0\0\1ftyp" + (len(body) + 16).to_bytes(8, "big") if extended
+            else (len(body) + 8).to_bytes(4, "big") + b"ftyp") + body
+    prefix = b"\0\0\0\x0cfree\0\0\0\0" if padding else b""
+    return prefix + ftyp + b"\0\0\0\x0cmoovdata\0\0\0\x0cmdatdata"
+
+
+@pytest.mark.parametrize("extended,padding", [(False, False), (True, False), (False, True)])
+def test_mp4_native_file_response_supports_range_seeking(tmp_path, extended, padding):
+    folder = tmp_path / "published"
+    folder.mkdir()
+    data = mp4_header(extended=extended, padding=padding)
+    (folder / "recording.mp4").write_bytes(data)
+    with client_for(lambda _: pytest.fail("MP4 must not request workbench data"), recordings_root=tmp_path,
+                    recordings={RUN: "published"}) as client:
+        full = client.get(f"/api/runs/{RUN}/recording.mp4")
+        assert full.status_code == 200 and full.content == data
+        assert full.headers["content-type"] == "video/mp4"
+        assert "media-src 'self'" in full.headers["content-security-policy"]
+        seek = client.get(f"/api/runs/{RUN}/recording.mp4", headers={"Range": "bytes=16-27"})
+        assert seek.status_code == 206 and seek.content == data[16:28]
+        assert seek.headers["content-range"] == f"bytes 16-27/{len(data)}"
+        suffix = client.get(f"/api/runs/{RUN}/recording.mp4", headers={"Range": "bytes=-8"})
+        assert suffix.status_code == 206 and suffix.content == data[-8:]
+        assert client.get(f"/api/runs/{RUN}/recording.mp4", headers={"Range": "bytes=9999-"}).status_code == 416
+
+
+def test_video_available_requires_an_actual_validated_file(tmp_path, sample):
+    folder = tmp_path / "published"
+    folder.mkdir()
+    target = folder / "recording.mp4"
+    with client_for(lambda _: httpx.Response(200, json=sample), recordings_root=tmp_path,
+                    recordings={RUN: "published"}) as client:
+        assert client.get(f"/api/runs/{RUN}").json()["video_available"] is False
+        assert client.get(f"/api/runs/{RUN}/recording.mp4").status_code == 404
+        target.write_bytes(b"not a video")
+        assert client.get(f"/api/runs/{RUN}").json()["video_available"] is False
+        target.write_bytes(mp4_header())
+        assert client.get(f"/api/runs/{RUN}").json()["video_available"] is True
+        target.unlink()
+        assert client.get(f"/api/runs/{RUN}").json()["video_available"] is False
+    with client_for(lambda _: httpx.Response(200, json=sample)) as client:
+        assert client.get(f"/api/runs/{RUN}").json()["video_available"] is False
+
+
+@pytest.mark.parametrize("invalid", [b"<html>private</html>", b"\0\0\0\x04ftypisom",
+    b"\0\0\x10\x00ftypisom\0\0\0\0", b"\0\0\0\x10ftypavif\0\0\0\0",
+    b"\0\0\0\x08ftyp", b"\0\0\0\1ftyp\0\0\0\0"])
+def test_mp4_bad_headers_are_never_published(tmp_path, sample, invalid):
+    folder = tmp_path / "published"
+    folder.mkdir()
+    (folder / "recording.mp4").write_bytes(invalid)
+    with client_for(lambda _: httpx.Response(200, json=sample), recordings_root=tmp_path,
+                    recordings={RUN: "published"}) as client:
+        assert client.get(f"/api/runs/{RUN}/recording.mp4").status_code == 404
+        assert client.get(f"/api/runs/{RUN}").json()["video_available"] is False
+
+
+def test_mp4_size_bound_and_unpublished_run_are_enforced(tmp_path, monkeypatch, sample):
+    import sc2_viewer.app as module
+
+    folder = tmp_path / "published"
+    folder.mkdir()
+    data = mp4_header()
+    (folder / "recording.mp4").write_bytes(data)
+    monkeypatch.setattr(module, "MAX_RECORDING", len(data) - 1)
+    with client_for(lambda _: httpx.Response(200, json=sample), recordings_root=tmp_path,
+                    recordings={RUN: "published"}) as client:
+        assert client.get(f"/api/runs/{RUN}/recording.mp4").status_code == 413
+        assert client.get(f"/api/runs/{RUN}").json()["video_available"] is False
+        assert client.get(f"/api/runs/{OTHER}/recording.mp4").status_code == 404
+        assert client.get(f"/api/runs/{RUN}/../recording.mp4").status_code == 404
+
+
+def test_mp4_symlink_is_unavailable_in_both_detail_and_download(tmp_path, sample):
+    private = tmp_path / "private.mp4"
+    private.write_bytes(mp4_header())
+    folder = tmp_path / "published"
+    folder.mkdir()
+    try:
+        (folder / "recording.mp4").symlink_to(private)
+    except OSError:
+        pytest.skip("Creating symlinks is unavailable for this user")
+    with client_for(lambda _: httpx.Response(200, json=sample), recordings_root=tmp_path,
+                    recordings={RUN: "published"}) as client:
+        assert client.get(f"/api/runs/{RUN}/recording.mp4").status_code == 404
+        assert client.get(f"/api/runs/{RUN}").json()["video_available"] is False

@@ -48,10 +48,17 @@
         </div>
         <div class="battle-stage" id="battle-stage">
           <img id="native-image" class="native-image hidden" alt="本局真实星际争霸Ⅱ画面">
+          <video id="native-video" class="native-video hidden" controls playsinline preload="metadata" aria-label="本局原生画面视频回放，可播放、暂停和拖动进度"></video>
           <canvas id="tactical-canvas" class="hidden" aria-label="按已记录公开状态绘制的战术示意图，非原生画面"></canvas>
           <div class="stage-topline"><span id="view-label">等待画面</span><span id="round-label">ROUND —</span></div>
           <div class="stage-empty" id="stage-empty"><span class="scan-mark">⌖</span><h2 id="empty-title">等待真实游戏画面</h2><p id="empty-text">选择公开实验后显示原生画面；战术视图单独标注。</p></div>
           <div class="tactical-legend hidden" id="tactical-legend"><span><i class="friendly"></i>我方单位</span><span><i class="structure"></i>我方建筑</span><span><i class="enemy"></i>可见敌方</span><span><i class="expansion"></i>公开资源位置</span></div>
+        </div>
+        <div class="video-options hidden" id="video-options" aria-label="原生录像播放选项">
+          <button id="video-play-toggle" class="secondary-button" type="button" aria-label="播放原生录像" aria-pressed="false" disabled>播放原生录像</button>
+          <label for="video-speed">播放速度</label>
+          <select id="video-speed" aria-label="原生录像播放速度" disabled><option value="1">1x · 原速</option><option value="2">2x</option><option value="4">4x</option><option value="8">8x</option><option value="" disabled>其他速度</option></select>
+          <span id="video-play-hint" class="small-muted">录像信息加载后，点击播放；可拖动画面底部进度条。</span>
         </div>
         <div class="stage-caption" id="media-description">原生 RGB 与战术示意图分开展示。模型等待期间，游戏时间可能暂停。</div>
       </section>

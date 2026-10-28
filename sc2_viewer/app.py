@@ -17,6 +17,9 @@ MAX_JSON = 12 * 1024 * 1024
 MAX_FRAME = 4 * 1024 * 1024
 MAX_RECORDING = 64 * 1024 * 1024
 MAX_MANIFEST = 256 * 1024
+MP4_BRANDS = {b"isom", b"iso2", b"iso3", b"iso4", b"iso5", b"iso6", b"iso8", b"iso9",
+              b"mp41", b"mp42", b"avc1", b"dash", b"M4V ", b"M4VH", b"M4VP", b"MSNV",
+              b"cmfc", b"cmfs", b"3gp4", b"3gp5", b"3gp6", b"3g2a", b"3g2b", b"3g2c"}
 
 
 def _media_file(settings: ViewerSettings, run_id: str, filename: str) -> Path:
@@ -39,6 +42,49 @@ def _media_file(settings: ViewerSettings, run_id: str, filename: str) -> Path:
     except (OSError, RuntimeError):
         raise HTTPException(404, "Recording not found") from None
     return resolved
+
+
+def _video_file(settings: ViewerSettings, run_id: str) -> Path:
+    """Check only the bounded MP4 file-type header, not movie decodability.
+
+    Both ordinary and fast-start MP4 are accepted: the position of moov/mdat
+    is irrelevant. Small leading padding and extended-size boxes are legal.
+    Administrators publish immutable, separately verified encoded media.
+    """
+    target = _media_file(settings, run_id, "recording.mp4")
+    try:
+        size = target.stat().st_size
+        if size > MAX_RECORDING:
+            raise HTTPException(413, "Recording exceeds the viewer size limit")
+        with target.open("rb") as source:
+            header = source.read(4096)
+    except OSError:
+        raise HTTPException(404, "Recording not found") from None
+    offset = 0
+    while offset + 8 <= len(header):
+        box_size = int.from_bytes(header[offset:offset + 4], "big")
+        kind = header[offset + 4:offset + 8]
+        prefix = 8
+        if box_size == 1:
+            if offset + 16 > len(header):
+                break
+            box_size = int.from_bytes(header[offset + 8:offset + 16], "big")
+            prefix = 16
+        if box_size < prefix or offset + box_size > size:
+            break
+        if kind == b"ftyp":
+            body_start = offset + prefix
+            if box_size < prefix + 8 or (box_size - prefix) % 4 \
+                    or body_start + 8 > len(header):
+                break
+            major = header[body_start:body_start + 4]
+            if major in MP4_BRANDS:
+                return target
+            break
+        if kind not in {b"free", b"skip", b"wide"}:
+            break
+        offset += box_size
+    raise HTTPException(404, "Recording is not a supported MP4 file")
 
 
 def create_app(settings: ViewerSettings | None = None, *, transport=None) -> FastAPI:
@@ -71,7 +117,7 @@ def create_app(settings: ViewerSettings | None = None, *, transport=None) -> Fas
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; "
-            "connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+            "media-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'"
         )
         response.headers["Cache-Control"] = "no-store" if request.url.path.startswith("/api/") else "no-cache"
         return response
@@ -149,6 +195,11 @@ def create_app(settings: ViewerSettings | None = None, *, transport=None) -> Fas
             raise HTTPException(502, "The experiment workbench returned a different run")
         result = projection.run(value)
         result["recording_available"] = run_id in settings.recordings
+        try:
+            _video_file(settings, run_id)
+            result["video_available"] = True
+        except HTTPException:
+            result["video_available"] = False
         return result
 
     @app.get("/api/runs/{run_id}/events")
@@ -184,6 +235,13 @@ def create_app(settings: ViewerSettings | None = None, *, transport=None) -> Fas
         if len(signature) != 12 or signature[:4] != b"RIFF" or signature[8:] != b"WEBP":
             raise HTTPException(404, "Recording is not a WebP image")
         return FileResponse(target, media_type="image/webp", filename="recording.webp",
+                            content_disposition_type="inline")
+
+    @app.get("/api/runs/{run_id}/recording.mp4")
+    def video(run_id: str):
+        allowed(run_id)
+        target = _video_file(settings, run_id)
+        return FileResponse(target, media_type="video/mp4", filename="recording.mp4",
                             content_disposition_type="inline")
 
     @app.get("/api/runs/{run_id}/recording-manifest")
